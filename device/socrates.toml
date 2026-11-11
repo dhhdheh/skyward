@@ -1,0 +1,209 @@
+# Skyward device config — Redmi K60 Pro (socrates), HyperOS OS3.0.304.0.WMKCNXM
+#
+# 所有数值均来自本机实机 (adb getprop / sysfs / init rc) 与该版本官方
+# 线刷包、完整 OTA 包的实测，模板参照 devices/fuxi.toml (小米 13, 同 SM8550)
+# 与 devices/ishtar.toml (小米 13 Ultra, 已真机验证)。
+#
+# 级别：一级「能启动/触摸/WLAN/刷机，不解密 data」。解密链以注释形式附在
+# 文末，等一级在真机跑通后再启用（需要 TEE 服务链与反复调试）。
+
+[device]
+codename = "socrates"
+brand = "Redmi"
+model = "Redmi K60 Pro"
+ab = true
+soc = { hans = "第二代骁龙®8移动平台", hant = "Snapdragon® 8 Gen 2 行動平台", en = "Snapdragon® 8 Gen 2 Mobile Platform" }
+# 实机 getprop 确认存在：ro.mi.os.version.incremental = OS3.0.304.0.WMKCNXM
+os_version_prop = "ro.mi.os.version.incremental"
+
+[display]
+# wm size/density: Physical 1440x3200 @560；Override 1080x2400 @420 是 MIUI
+# 用户缩放，不是物理值。ro.sf.lcd_density=560，与 1440x3200 的 ishtar 一致。
+width = 1440
+height = 3200
+density = 560
+diagonal = 6.67
+# corner_radius 取自系统 overlay，暂不设置（默认为 0）
+
+[modules]
+# /vendor/lib/modules 是指向 /vendor_dlkm/lib/modules 的符号链接；
+# super.img 的 LP metadata 实测含 vendor_dlkm_a(41 MB)、vendor_a(768 MB)。
+sources = ["vendor_boot", "vendor_dlkm", "vendor"]
+# 实机 /sys/module/ 下实际加载：goodix_core、goodix_fod、xiaomi_touch、kiwi_v2
+# 触摸为 Goodix 方案，不是 fuxi/ishtar 的 ST FTS SPI。依赖由 modules.dep 自动带出。
+# 若触摸无响应，可尝试加入 "goodix_fod" 或调整顺序（需真机验证）。
+load = ["goodix_core", "xiaomi_touch"]
+
+# 触摸节点属主：逐条取自本机
+# /odm/etc/init/vendor.xiaomi.hw.touchfeature@1.0-service.rc 的
+# "chown system system <path>" + "chmod 0664"，并按真机
+# /sys/class/touch/touch_dev/ 实际节点过滤掉 5 个驱动未创建的路径。
+[[owners]]
+user = "system"
+group = "system"
+mode = 0o664
+paths = [
+    "/dev/xiaomi-touch",
+    "/dev/xiaomi-touch-knock",
+    "/dev/xiaomi-thp",
+    "/sys/class/touch/tp_dev/fod_status",
+    "/sys/class/touch/touch_dev/gesture_single_tap_state",
+    "/sys/class/touch/touch_dev/fod_press_status",
+    "/proc/tp_selftest",
+    "/proc/tp_selftest_1",
+    "/sys/class/touch/touch_dev/update_rawdata",
+    "/sys/class/touch/touch_dev/enable_touch_raw",
+    "/sys/class/touch/touch_dev/enable_touch_delta",
+    "/sys/class/touch/touch_dev/touch_thp_dump",
+    "/sys/class/touch/touch_dev/touch_thp_cmd",
+    "/sys/class/touch/touch_dev/suspend_state",
+    "/sys/class/touch/touch_dev/prox_sensor",
+    "/sys/class/touch/touch_dev/touch_thp_rx_num",
+    "/sys/class/touch/touch_dev/touch_thp_tx_num",
+    "/sys/class/touch/touch_dev/touch_thp_x_resolution",
+    "/sys/class/touch/touch_dev/touch_thp_y_resolution",
+    "/sys/class/touch/touch_dev/touch_thp_smooth",
+    "/sys/class/touch/touch_dev/touch_thp_noisefilter",
+    "/sys/class/touch/touch_dev/touch_thp_downthd",
+    "/sys/class/touch/touch_dev/touch_thp_upthd",
+    "/sys/class/touch/touch_dev/touch_thp_movethd",
+    "/sys/class/touch/touch_dev/touch_thp_islandthd",
+    "/sys/class/touch/touch_dev/touch_thp_cmd_data",
+    "/sys/class/touch/touch_dev/palm_sensor_data",
+    "/sys/class/touch/touch_dev/palm_sensor",
+    "/proc/tp_hal_version",
+    "/proc/tp_fw_version",
+    "/proc/tp_lockdown_info",
+    "/sys/class/touch/touch_dev/touch_active_status",
+    "/sys/class/touch/touch_dev/touch_finger_status",
+    "/sys/class/touch/touch_dev/touch_irq_no",
+    "/sys/class/touch/touch_dev/touch_sensor",
+    "/sys/class/touch/touch_dev/touch_sensor_ctrl",
+    "/sys/class/touch/touch_dev/touch_thp_mem_notify",
+    "/sys/class/touch/touch_dev/touch_thp_testmode",
+    "/sys/class/touch/touch_dev/touch_thp_testresult",
+    "/sys/class/touch/touch_dev/touch_thp_preset_point",
+    "/sys/class/touch/touch_dev/touch_thp_breakline_mode",
+    "/sys/class/touch/touch_dev/touch_thp_breakline_result",
+    "/sys/class/touch/touch_dev/touch_doze_analysis",
+    "/sys/class/touch/touch_dev/touch_thp_cmd_ready",
+    "/sys/class/touch/touch_dev/touch_ic_buffer",
+    "/sys/class/touch/touch_dev/abnormal_event",
+]
+
+# /vendor/etc/init/hw/init.qti.kernel.rc:
+#   service kernel-post-boot /vendor/bin/sh /vendor/bin/init.kernel.post_boot.sh
+#   user root, group root system wakelock graphics, oneshot
+[[service]]
+path = "/vendor/bin/sh"
+args = ["/vendor/bin/init.kernel.post_boot.sh"]
+libraries = ["/system/lib64", "/vendor/lib64"]
+oneshot = true
+user = "root"
+groups = ["root", "system", "wakelock", "graphics"]
+
+# /odm/etc/init/vendor.xiaomi.hw.touchfeature@1.0-service.rc:
+#   service touch_report /odm/bin/touch_report
+#   user system, group system uhid input, capabilities SYS_NICE
+# 注意：本机 /odm/bin/ 里没有 touchsensor（只有 touch_report /
+# toucheventcheck / touch_raw），因此不列 touchsensor，避免启动失败。
+[[service]]
+path = "/odm/bin/touch_report"
+user = "system"
+groups = ["system", "uhid", "input"]
+capabilities = ["SYS_NICE"]
+
+# WLAN：实机 /sys/module/cnss2/holders/kiwi_v2 确认由 kiwi_v2 驱动；
+# /sys/kernel/cnss/fs_ready 存在（/sys/kernel/icnss 不存在，故用 cnss 路径）。
+# WCNSS_qcom_cfg.ini 在 /vendor/etc/wifi/kiwi_v2/ 实测存在。
+# wlan_mac.bin 位于 persist，路径沿用同平台 fuxi/ishtar（本机 shell 无权限读取，
+# 若 Wi-Fi 起不来需核对 persist 内的实际文件名）。
+[wlan]
+modules = ["qca_cld3_kiwi_v2"]
+writes = [{ path = "/sys/kernel/cnss/fs_ready", value = "1" }]
+firmware = [
+    { name = "wlan/qca_cld/kiwi_v2/WCNSS_qcom_cfg.ini", path = "/vendor/etc/wifi/kiwi_v2/WCNSS_qcom_cfg.ini" },
+    { name = "wlan/qca_cld/kiwi_v2/wlan_mac.bin", partition = "persist", path = "kiwi_v2/wlan_mac.bin" },
+]
+interface = "wlan0"
+supplicant = "/vendor/bin/hw/wpa_supplicant"
+libraries = ["/vendor/lib64", "/system/lib64"]
+service = "android.hardware.wifi.supplicant.ISupplicant/default"
+probe = "http://connect.rom.miui.com/generate_204"
+
+[update]
+server = "https://update.miui.com/updates/miotaV3.php"
+
+# 原厂基线：手机当前系统、线刷包、OTA 包三者版本一致。
+# package 直链已实测 HTTP 200 / 7,135,134,388 字节 (6.64 GiB)。
+# recovery 哈希已通过远程解析 OTA 包 payload.bin 的 DeltaArchiveManifest
+# 验证，与本地线刷包 recovery.img 的 SHA-256 完全相同。
+[stock]
+version = "OS3.0.304.0.WMKCNXM"
+package = "https://bkt-sgp-miui-ota-update-alisgp.oss-ap-southeast-1.aliyuncs.com/OS3.0.304.0.WMKCNXM/socrates-ota_full-OS3.0.304.0.WMKCNXM-user-16.0-694e581e9e.zip"
+recovery = "a1ed92db62fb0915b20309c5fe80b9181c6cf3ecef7d76e68503a2e1e9ff8c88"
+
+# 实机：vendor_dlkm 含 qcom-hv-haptics.ko，/sys/class/qcom-haptics/
+# lra_frequency_hz 存在，ro.vendor.mm.vibrator.sys_path=/sys/class/qcom-haptics
+[haptics]
+click = 0
+resonance = "/sys/class/qcom-haptics/lra_frequency_hz"
+strength = { lightest = 0.5, strongest = 1.0 }
+
+# /dev/block/by-name 实测存在：modemst1 modemst2 fsg fsc persist
+[backup]
+efs = ["modemst1", "modemst2", "fsg", "fsc", "persist"]
+data_skipped = ["vendor/tzstorage", "vendor/qtee", "vendor/fingerprint", "vendor/fpc", "vendor/goodix"]
+
+[wipe]
+logs = [
+    "/data/miuilog",
+    "/data/vendor/diag",
+    "/data/vendor/log",
+    "/data/vendor/ramdump",
+    "/data/vendor/ssrdump",
+    "/data/vendor/tombstones",
+    "/data/vendor/wlan_logs",
+]
+
+# ============================================================
+# 二级（解密 data 分区）：以下服务链来自本机 /vendor/etc/init/*.rc 实测，
+# 路径、user、group 均已核对，与 ishtar.toml 一致。一级跑通前请勿启用：
+# 它们依赖已安装系统的库与 TEE，且本机存在 recovery SDK 33 / 系统 SDK 36
+# 的基线差异，需要真机反复调试。
+#
+# [[service]]
+# path = "/vendor/bin/qseecomd"
+# libraries = ["/system/lib64", "/vendor/lib64"]
+# ready_property = "vendor.sys.listeners.registered"
+# user = "root"
+# groups = ["root", "drmrpc"]
+#
+# [[service]]
+# path = "/vendor/bin/hw/android.hardware.security.keymint-service-qti"
+# libraries = ["/system/lib64", "/vendor/lib64"]
+# ready_service = "android.hardware.security.keymint.IKeyMintDevice/default"
+# user = "system"
+# groups = ["system", "drmrpc"]
+#
+# [[service]]
+# path = "/mnt/system_ext/bin/hwservicemanager"
+# libraries = ["/mnt/system/system/lib64/bootstrap", "/mnt/system/system/lib64", "/mnt/system_ext/lib64"]
+# ready_property = "hwservicemanager.ready"
+# user = "system"
+# groups = ["system", "readproc"]
+#
+# [[service]]
+# path = "/vendor/bin/hw/android.hardware.gatekeeper@1.0-service-qti"
+# libraries = ["/system/lib64", "/vendor/lib64"]
+# ready_hardware_service = "android.hardware.gatekeeper@1.0::IGatekeeper/default"
+# user = "system"
+# groups = ["system"]
+#
+# [[service]]
+# path = "/vendor/bin/hw/android.hardware.boot@1.2-service"
+# libraries = ["/system/lib64", "/vendor/lib64"]
+# ready_hardware_service = "android.hardware.boot@1.2::IBootControl/default"
+# user = "root"
+# groups = ["root"]
+# ============================================================
