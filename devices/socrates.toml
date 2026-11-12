@@ -36,8 +36,12 @@ load = ["goodix_core", "xiaomi_touch"]
 
 # 触摸节点属主：逐条取自本机
 # /odm/etc/init/vendor.xiaomi.hw.touchfeature@1.0-service.rc 的
-# "chown system system <path>" + "chmod 0664"，并按真机
-# /sys/class/touch/touch_dev/ 实际节点过滤掉 5 个驱动未创建的路径。
+# "chown system system <path>" + "chmod 0664"，并逐个在真机 Skyward
+# recovery 环境核过存在性，删去 rc 有定义但驱动未创建的路径。
+# 特别注意 /dev/xiaomi-thp、/sys/class/touch/tp_dev/fod_status、
+# /proc/tp_selftest_1：owners 里只要有一个节点不存在，Skyward 的
+# bring_up 就整体报 "devices not brought up" 并用 ? 中断，后面的
+# [[service]]（含 touch_report）全部跳过，触摸会完全失效。
 [[owners]]
 user = "system"
 group = "system"
@@ -45,12 +49,9 @@ mode = 0o664
 paths = [
     "/dev/xiaomi-touch",
     "/dev/xiaomi-touch-knock",
-    "/dev/xiaomi-thp",
-    "/sys/class/touch/tp_dev/fod_status",
     "/sys/class/touch/touch_dev/gesture_single_tap_state",
     "/sys/class/touch/touch_dev/fod_press_status",
     "/proc/tp_selftest",
-    "/proc/tp_selftest_1",
     "/sys/class/touch/touch_dev/update_rawdata",
     "/sys/class/touch/touch_dev/enable_touch_raw",
     "/sys/class/touch/touch_dev/enable_touch_delta",
@@ -127,7 +128,10 @@ firmware = [
 ]
 interface = "wlan0"
 supplicant = "/vendor/bin/hw/wpa_supplicant"
-libraries = ["/vendor/lib64", "/system/lib64"]
+# 兜底：libnl.so 与 supplicant 的 AIDL 库只在 VNDK apex 里。
+# 正常由 bring_up 的 secure::libraries() 自动补上这个路径，但 owners
+# 一旦失败整条链会中断，wpa_supplicant 就因缺 libnl.so 以 255 退出。
+libraries = ["/vendor/lib64", "/system/lib64", "/apex/com.android.vndk.v33/lib64"]
 service = "android.hardware.wifi.supplicant.ISupplicant/default"
 probe = "http://connect.rom.miui.com/generate_204"
 
